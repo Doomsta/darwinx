@@ -1,4 +1,4 @@
-module github.com/doomsta/darwinx
+module github.com/Doomsta/darwinx
 
 go 1.14
 
