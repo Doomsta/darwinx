@@ -23,7 +23,7 @@ const schemaQuery = `CREATE TABLE IF NOT EXISTS %s (
 	id             INT GENERATED ALWAYS AS IDENTITY NOT NULL,
 	version        DOUBLE PRECISION NOT NULL,
 	description    TEXT NOT NULL,
-	checksum       CHARACTER(128) NOT NULL CHECK (checksum <> ''),
+	checksum       CHARACTER(64) NOT NULL CHECK (checksum <> ''),
 	applied_at     TIMESTAMPTZ NOT NULL,
 	execution_time INTERVAL NOT NULL,
 	UNIQUE(version),

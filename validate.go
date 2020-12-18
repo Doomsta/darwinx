@@ -1,6 +1,8 @@
 package darwinx
 
-import "context"
+import (
+	"context"
+)
 
 // Validate if the database migrations are applied and consistent
 func (d *Darwinx) Validate(ctx context.Context) error {

@@ -37,6 +37,35 @@ func TestMigrate(t *testing.T) {
 }
 
 
+func TestMigrate2Runs(t *testing.T) {
+	migrations := []Migration{
+		{
+			Version: 1,
+			Description: "Version 1",
+			Script: "CREATE TABLE foo (id SERIAL)",
+		},
+		{
+			Version: 2,
+			Description: "Version 2",
+			Script: "CREATE TABLE foo2 (id SERIAL)",
+		},
+	}
+	conn, teardown, err := setup()
+	defer teardown()
+	assert.NoError(t, err)
+	assert.NoError(t, conn.Ping(context.Background()))
+	d, err := New(conn, WithMigration(migrations))
+	assert.NoError(t, err)
+	err = d.Migrate(context.Background())
+	assert.NoError(t, err)
+	err = d.Migrate(context.Background())
+	assert.NoError(t, err)
+
+	_, err = d.Info(context.Background())
+	assert.NoError(t, err)
+}
+
+
 func TestMigrateInvalidSQL(t *testing.T) {
 	migrations := []Migration{
 		{
