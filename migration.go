@@ -23,9 +23,9 @@ type MigrationRecord struct {
 }
 
 
-// Checksum calculate the Script sha512
+// Checksum calculate the Script sha256
 func (m Migration) Checksum() string {
-	return fmt.Sprintf("%x", sha256.New().Sum([]byte(m.Script)))
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(m.Script)))
 }
 
 // MigrationInfo is a struct used in the infoChan to inform clients about
