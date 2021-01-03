@@ -23,7 +23,7 @@ var (
 						id INT 		auto_increment, 
 						title 		VARCHAR(255),
 						PRIMARY KEY (id)
-					 ) ENGINE=InnoDB CHARACTER SET=utf8;`,
+					 );`,
 		},
 		{
 			Version:     2,
