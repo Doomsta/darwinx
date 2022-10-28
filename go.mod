@@ -1,6 +1,6 @@
-module github.com/doomsta/darwinx
+module github.com/Doomsta/darwinx
 
-go 1.14
+go 1.19
 
 require (
 	github.com/jackc/pgx/v4 v4.8.1
