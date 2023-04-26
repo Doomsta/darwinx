@@ -6,21 +6,21 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/ory/dockertest/v3"
 	"github.com/pkg/errors"
-	_ "github.com/stretchr/testify"
 	"github.com/stretchr/testify/assert"
 	"net/url"
 	"testing"
 )
 
 func TestMigrate(t *testing.T) {
+	ctx := context.Background()
 	migrations := []Migration{
 		{
-			Version: 1,
+			Version:     1,
 			Description: "Version 1",
-			Script: "CREATE TABLE foo (id SERIAL)",
+			Script:      "CREATE TABLE foo (id SERIAL)",
 		},
 	}
-	conn, teardown, err := setup()
+	conn, teardown, err := setup(ctx)
 	defer teardown()
 	assert.NoError(t, err)
 	assert.NoError(t, conn.Ping(context.Background()))
@@ -36,60 +36,62 @@ func TestMigrate(t *testing.T) {
 	assert.Equal(t, info[0].Status, Applied)
 }
 
-
 func TestMigrate2Runs(t *testing.T) {
+	ctx := context.Background()
+
 	migrations := []Migration{
 		{
-			Version: 1,
+			Version:     1,
 			Description: "Version 1",
-			Script: "CREATE TABLE foo (id SERIAL)",
+			Script:      "CREATE TABLE foo (id SERIAL)",
 		},
 		{
-			Version: 2,
+			Version:     2,
 			Description: "Version 2",
-			Script: "CREATE TABLE foo2 (id SERIAL)",
+			Script:      "CREATE TABLE foo2 (id SERIAL)",
 		},
 	}
-	conn, teardown, err := setup()
+	conn, teardown, err := setup(ctx)
 	defer teardown()
 	assert.NoError(t, err)
-	assert.NoError(t, conn.Ping(context.Background()))
+	assert.NoError(t, conn.Ping(ctx))
 	d, err := New(conn, WithMigration(migrations))
 	assert.NoError(t, err)
-	err = d.Migrate(context.Background())
+	err = d.Migrate(ctx)
 	assert.NoError(t, err)
-	err = d.Migrate(context.Background())
+	err = d.Migrate(ctx)
 	assert.NoError(t, err)
 
-	_, err = d.Info(context.Background())
+	_, err = d.Info(ctx)
 	assert.NoError(t, err)
 }
 
-
 func TestMigrateInvalidSQL(t *testing.T) {
+	ctx := context.Background()
+
 	migrations := []Migration{
 		{
-			Version: 1,
+			Version:     1,
 			Description: "Version 1",
-			Script: "CREATE TABLE foo (id SERIAL)",
+			Script:      "CREATE TABLE foo (id SERIAL)",
 		},
 		{
-			Version: 2,
+			Version:     2,
 			Description: "Version 2",
-			Script: "CREATE haehfj // TABLE --foo (id SERIAL)",
+			Script:      "CREATE haehfj // TABLE --foo (id SERIAL)",
 		},
 	}
-	conn, teardown, err := setup()
+	conn, teardown, err := setup(ctx)
 	defer teardown()
 	assert.NoError(t, err)
-	assert.NoError(t, conn.Ping(context.Background()))
+	assert.NoError(t, conn.Ping(ctx))
 	d, err := New(conn, WithMigration(migrations))
 	assert.NoError(t, err)
-	err = d.Migrate(context.Background())
+	err = d.Migrate(ctx)
 	assert.Error(t, err)
 }
 
-func setup() (*pgx.Conn, func() error, error) {
+func setup(ctx context.Context) (*pgx.Conn, func() error, error) {
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		return nil, func() error {
@@ -107,7 +109,7 @@ func setup() (*pgx.Conn, func() error, error) {
 	var conn *pgx.Conn
 	if err := pool.Retry(func() error {
 		var err error
-		conn, err = pgx.Connect(context.Background(), (&url.URL{
+		conn, err = pgx.Connect(ctx, (&url.URL{
 			Scheme:   "postgres",
 			User:     url.UserPassword("postgres", "admin"),
 			Host:     fmt.Sprintf("localhost:%s", resource.GetPort("5432/tcp")),
@@ -117,7 +119,7 @@ func setup() (*pgx.Conn, func() error, error) {
 		if err != nil {
 			return errors.WithStack(err)
 		}
-		return conn.Ping(context.Background())
+		return conn.Ping(ctx)
 	}); err != nil {
 		return nil, func() error {
 			return nil
