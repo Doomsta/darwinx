@@ -171,6 +171,7 @@ func (d *Darwinx) insertRecord(ctx context.Context, tx pgx.Tx, record MigrationR
 
 func planMigration(records []MigrationRecord, migrations []Migration) []Migration {
 	if len(records) == 0 {
+		sort.Sort(byMigrationVersion(migrations))
 		return migrations
 	}
 
