@@ -104,8 +104,8 @@ func (d *Darwinx) Migrate(ctx context.Context) error {
 			ExecutionTime: time.Since(s),
 		})
 		if err != nil {
-			if err := tx.Rollback(ctx); err != nil {
-				panic(err)
+			if rollbackErr := tx.Rollback(ctx); err != nil {
+				return rollbackErr
 			}
 			return err
 		}
