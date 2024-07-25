@@ -91,8 +91,8 @@ func (d *Darwinx) Migrate(ctx context.Context) error {
 		s := time.Now()
 		_, err := tx.Exec(ctx, migration.Script)
 		if err != nil {
-			if err := tx.Rollback(ctx); err != nil {
-				panic(err)
+			if rollbackErr := tx.Rollback(ctx); err != nil {
+				return rollbackErr
 			}
 			return errors.WithStack(err)
 		}
