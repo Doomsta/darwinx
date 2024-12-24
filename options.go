@@ -1,5 +1,7 @@
 package darwinx
 
+import "github.com/pkg/errors"
+
 type Option interface {
 	apply(darwinx *Darwinx) error
 }
@@ -21,6 +23,15 @@ func WithMigration(migrations []Migration) Option {
 
 func WithTableName(tn string) Option {
 	return optionFn(func(darwinx *Darwinx) error {
+		// only a-z, A-Z, 0-9 and _ are allowed
+		for _, r := range tn {
+			if !((r >= 'a' && r <= 'z') ||
+				(r >= 'A' && r <= 'Z') ||
+				(r >= '0' && r <= '9') ||
+				r == '_') {
+				return errors.New("invalid table name")
+			}
+		}
 		darwinx.tableName = tn
 		return nil
 	})
