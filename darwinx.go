@@ -4,20 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
 	"sort"
 	"sync"
 	"time"
 )
-
-const selectQuery = `SELECT
-	version,
-	description,
-	checksum,
-	applied_at,
-	execution_time
-FROM %s
-	ORDER BY version ASC;`
 
 const schemaQuery = `CREATE TABLE IF NOT EXISTS %s (
 	id             INT GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -40,16 +32,16 @@ const insertQuery = `INSERT INTO %s (
 
 // Darwinx is a helper struct to access the Validate and migration functions
 type Darwinx struct {
-	conn       *pgx.Conn
+	pool       *pgxpool.Pool
 	migrations []Migration
 	mutex      sync.Mutex
 	tableName  string
 }
 
 // New returns a new Darwinx struct
-func New(conn *pgx.Conn, options ...Option) (*Darwinx, error) {
+func New(pool *pgxpool.Pool, options ...Option) (*Darwinx, error) {
 	d := &Darwinx{
-		conn:      conn,
+		pool:      pool,
 		mutex:     sync.Mutex{},
 		tableName: "migration",
 	}
@@ -83,34 +75,33 @@ func (d *Darwinx) Migrate(ctx context.Context) error {
 		return err
 	}
 
-	tx, err := d.conn.Begin(ctx)
+	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	for _, migration := range planMigration(records, d.migrations) {
-		s := time.Now()
-		_, err := tx.Exec(ctx, migration.Script)
-		if err != nil {
-			if rollbackErr := tx.Rollback(ctx); err != nil {
-				return rollbackErr
-			}
-			return errors.WithStack(err)
-		}
-		err = d.insertRecord(ctx, tx, MigrationRecord{
-			Version:       migration.Version,
-			Description:   migration.Description,
-			Checksum:      migration.Checksum(),
-			AppliedAt:     s,
-			ExecutionTime: time.Since(s),
-		})
-		if err != nil {
-			if rollbackErr := tx.Rollback(ctx); err != nil {
-				return rollbackErr
-			}
-			return err
-		}
-	}
 
+	err = (func() error {
+		for _, migration := range planMigration(records, d.migrations) {
+			s := time.Now()
+			if _, err := tx.Exec(ctx, migration.Script); err != nil {
+				return errors.WithMessage(err, fmt.Sprintf("migration %f failed", migration.Version))
+			}
+
+			if err := d.insertRecord(ctx, tx, MigrationRecord{
+				Version:       migration.Version,
+				Description:   migration.Description,
+				Checksum:      migration.Checksum(),
+				AppliedAt:     s,
+				ExecutionTime: time.Since(s),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})()
+	if err != nil {
+		return errors.WithMessage(tx.Rollback(ctx), "rollback failed")
+	}
 	return tx.Commit(ctx)
 }
 
@@ -134,8 +125,15 @@ func (d *Darwinx) Info(ctx context.Context) ([]MigrationInfo, error) {
 }
 
 func (d *Darwinx) allFromDB(ctx context.Context) ([]MigrationRecord, error) {
-	query := fmt.Sprintf(selectQuery, d.tableName)
-	rows, err := d.conn.Query(ctx, query)
+	query := fmt.Sprintf(`SELECT
+	version,
+	description,
+	checksum,
+	applied_at,
+	execution_time
+FROM %s
+	ORDER BY version ASC;`, d.tableName)
+	rows, err := d.pool.Query(ctx, query)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -154,7 +152,7 @@ func (d *Darwinx) allFromDB(ctx context.Context) ([]MigrationRecord, error) {
 }
 
 func (d *Darwinx) createTable(ctx context.Context) error {
-	_, err := d.conn.Exec(ctx, fmt.Sprintf(schemaQuery, d.tableName))
+	_, err := d.pool.Exec(ctx, fmt.Sprintf(schemaQuery, d.tableName))
 	return errors.WithStack(err)
 }
 
@@ -166,7 +164,10 @@ func (d *Darwinx) insertRecord(ctx context.Context, tx pgx.Tx, record MigrationR
 		record.AppliedAt,
 		record.ExecutionTime,
 	)
-	return err
+	if err != nil {
+		return errors.WithMessage(err, "insert record failed")
+	}
+	return nil
 }
 
 func planMigration(records []MigrationRecord, migrations []Migration) []Migration {
