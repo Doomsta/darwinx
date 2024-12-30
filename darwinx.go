@@ -100,7 +100,10 @@ func (d *Darwinx) Migrate(ctx context.Context) error {
 		return nil
 	})()
 	if err != nil {
-		return errors.WithMessage(tx.Rollback(ctx), "rollback failed")
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+			return errors.WithMessage(rollbackErr, "rollback failed")
+		}
+		return err
 	}
 	return tx.Commit(ctx)
 }

@@ -12,7 +12,7 @@ var (
 		Version:     1,
 		Description: "Creating table posts",
 		Script: `CREATE TABLE posts (
-    id INT 		auto_increment, 
+    id INT, 
 	title 		VARCHAR(255),
 	PRIMARY KEY (id)
  );`,
