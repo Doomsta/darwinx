@@ -9,7 +9,7 @@ import (
 
 const txt = `---- 1 Creating table posts
 CREATE TABLE posts (
-	id INT auto_increment,
+	id INT,
 	title VARCHAR(255),
 	PRIMARY KEY (id)
 );
