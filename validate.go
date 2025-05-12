@@ -27,8 +27,10 @@ func (d *Darwinx) Validate(ctx context.Context) error {
 		}
 	}
 
-	if err := compareMigrationChecksums(applied, d.migrations); err != nil {
-		return err
+	if changed := compareMigrationChecksums(applied, d.migrations); len(changed) != 0 {
+		return InvalidChecksumError{
+			Versions: changed,
+		}
 	}
 	return nil
 }
@@ -50,7 +52,7 @@ func getRemovedMigration(applied []MigrationRecord, migrations []Migration) []fl
 	return removed
 }
 
-func compareMigrationChecksums(applied []MigrationRecord, migrations []Migration) error {
+func compareMigrationChecksums(applied []MigrationRecord, migrations []Migration) []float64 {
 	versionMap := map[float64]MigrationRecord{}
 
 	for _, migration := range applied {
@@ -60,9 +62,7 @@ func compareMigrationChecksums(applied []MigrationRecord, migrations []Migration
 	for _, migration := range migrations {
 		if m, ok := versionMap[migration.Version]; ok {
 			if m.Checksum != migration.Checksum() {
-				return InvalidChecksumError{
-					Version: migration.Version,
-				}
+				return []float64{migration.Version}
 			}
 		}
 	}

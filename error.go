@@ -23,7 +23,7 @@ func (i IllegalMigrationVersionError) Error() string {
 	return fmt.Sprintf("Illegal migration version number %f.", i.Version)
 }
 
-// RemovedMigrationError is used to report when a migration is removed from the list
+// RemovedMigrationsError is used to report when a migration is removed from the list
 type RemovedMigrationsError struct {
 	Versions []float64
 }
@@ -38,9 +38,9 @@ func (r RemovedMigrationsError) Error() string {
 
 // InvalidChecksumError is used to report when a migration was modified
 type InvalidChecksumError struct {
-	Version float64
+	Versions []float64
 }
 
 func (i InvalidChecksumError) Error() string {
-	return fmt.Sprintf("Invalid cheksum for migration %f", i.Version)
+	return fmt.Sprintf("Invalid checksum for migrations %v", i.Versions)
 }
