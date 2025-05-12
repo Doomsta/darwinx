@@ -2,7 +2,6 @@ package darwinx
 
 import (
 	"github.com/pkg/errors"
-	"sync"
 )
 
 type Option interface {
