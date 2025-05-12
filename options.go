@@ -1,6 +1,9 @@
 package darwinx
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+	"sync"
+)
 
 type Option interface {
 	apply(darwinx *Darwinx) error
@@ -17,6 +20,13 @@ func WithMigration(migrations []Migration) Option {
 		for _, m := range migrations {
 			darwinx.migrations = append(darwinx.migrations, m)
 		}
+		return nil
+	})
+}
+
+func WithNoTransaction() Option {
+	return optionFn(func(darwinx *Darwinx) error {
+		darwinx.transaction = false
 		return nil
 	})
 }

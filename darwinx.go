@@ -32,18 +32,20 @@ const insertQuery = `INSERT INTO %s (
 
 // Darwinx is a helper struct to access the Validate and migration functions
 type Darwinx struct {
-	pool       *pgxpool.Pool
-	migrations []Migration
-	mutex      sync.Mutex
-	tableName  string
+	pool        *pgxpool.Pool
+	migrations  []Migration
+	mutex       sync.Mutex
+	tableName   string
+	transaction bool
 }
 
 // New returns a new Darwinx struct
 func New(pool *pgxpool.Pool, options ...Option) (*Darwinx, error) {
 	d := &Darwinx{
-		pool:      pool,
-		mutex:     sync.Mutex{},
-		tableName: "migration",
+		pool:        pool,
+		mutex:       sync.Mutex{},
+		tableName:   "migration",
+		transaction: true,
 	}
 	for _, o := range options {
 		err := o.apply(d)
@@ -74,7 +76,13 @@ func (d *Darwinx) Migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if d.transaction {
+		return d.runWithTx(ctx, records)
+	}
+	return d.runWithoutTx(ctx, records)
+}
 
+func (d *Darwinx) runWithTx(ctx context.Context, records []MigrationRecord) error {
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return errors.WithStack(err)
@@ -106,6 +114,38 @@ func (d *Darwinx) Migrate(ctx context.Context) error {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func (d *Darwinx) runWithoutTx(ctx context.Context, records []MigrationRecord) error {
+	for _, migration := range planMigration(records, d.migrations) {
+		s := time.Now()
+
+		tx, txErr := d.pool.Begin(ctx)
+		if txErr != nil {
+			return errors.WithStack(txErr)
+		}
+
+		if _, err := tx.Exec(ctx, migration.Script); err != nil {
+			return errors.WithMessage(err, fmt.Sprintf("migration %f failed", migration.Version))
+		}
+
+		if err := d.insertRecord(ctx, tx, MigrationRecord{
+			Version:       migration.Version,
+			Description:   migration.Description,
+			Checksum:      migration.Checksum(),
+			AppliedAt:     s,
+			ExecutionTime: time.Since(s),
+		}); err != nil {
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				return errors.WithMessage(rollbackErr, "rollback failed")
+			}
+			return errors.WithMessage(err, "commit failed; transaction rolled back")
+		}
+	}
+	return nil
 }
 
 // Info returns the status of all migrations
