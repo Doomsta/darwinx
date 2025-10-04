@@ -23,13 +23,6 @@ func WithMigration(migrations []Migration) Option {
 	})
 }
 
-func WithNoTransaction() Option {
-	return optionFn(func(darwinx *Darwinx) error {
-		darwinx.transaction = false
-		return nil
-	})
-}
-
 func WithTableName(tn string) Option {
 	return optionFn(func(darwinx *Darwinx) error {
 		// only a-z, A-Z, 0-9 and _ are allowed
