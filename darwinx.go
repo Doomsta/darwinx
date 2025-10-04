@@ -32,20 +32,17 @@ const insertQuery = `INSERT INTO %s (
 
 // Darwinx is a helper struct to access the Validate and migration functions
 type Darwinx struct {
-	pool        *pgxpool.Pool
-	migrations  []Migration
-	mutex       sync.Mutex
-	tableName   string
-	transaction bool
+	pool       *pgxpool.Pool
+	migrations []Migration
+	mutex      sync.Mutex
+	tableName  string
 }
 
 // New returns a new Darwinx struct
 func New(pool *pgxpool.Pool, options ...Option) (*Darwinx, error) {
 	d := &Darwinx{
-		pool:        pool,
-		mutex:       sync.Mutex{},
-		tableName:   "migration",
-		transaction: true,
+		pool:      pool,
+		tableName: "migration",
 	}
 	for _, o := range options {
 		err := o.apply(d)
@@ -76,76 +73,62 @@ func (d *Darwinx) Migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if d.transaction {
-		return d.runWithTx(ctx, records)
-	}
-	return d.runWithoutTx(ctx, records)
+	return d.run(ctx, records)
 }
 
-func (d *Darwinx) runWithTx(ctx context.Context, records []MigrationRecord) error {
+func (d *Darwinx) applyMigration(ctx context.Context, migration Migration) error {
+	start := time.Now()
+
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
-	err = (func() error {
-		for _, migration := range planMigration(records, d.migrations) {
-			s := time.Now()
-			if _, err := tx.Exec(ctx, migration.Script); err != nil {
-				return errors.WithMessage(err, fmt.Sprintf("migration %f failed", migration.Version))
-			}
+	committed := false
+	defer func(tx pgx.Tx) {
+		if !committed {
+			_ = tx.Rollback(context.Background())
+		}
+	}(tx)
 
-			if err := d.insertRecord(ctx, tx, MigrationRecord{
-				Version:       migration.Version,
-				Description:   migration.Description,
-				Checksum:      migration.Checksum(),
-				AppliedAt:     s,
-				ExecutionTime: time.Since(s),
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})()
-	if err != nil {
-		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-			return errors.WithMessage(rollbackErr, "rollback failed")
-		}
-		return err
+	if _, err := tx.Exec(ctx, migration.Script); err != nil {
+		return errors.WithMessage(err, fmt.Sprintf("migration %s failed during Exec", formatVersion(migration.Version)))
 	}
-	return tx.Commit(ctx)
+
+	rec := MigrationRecord{
+		Version:       migration.Version,
+		Description:   migration.Description,
+		Checksum:      migration.Checksum(),
+		AppliedAt:     start,
+		ExecutionTime: time.Since(start),
+	}
+	if err := d.insertRecord(ctx, tx, rec); err != nil {
+		return errors.WithMessage(err, fmt.Sprintf("migration %s failed during record insert", formatVersion(migration.Version)))
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		rbErr := tx.Rollback(ctx)
+		if rbErr != nil {
+			return errors.Wrapf(err, "commit failed for migration %s; rollback also failed: %v",
+				formatVersion(migration.Version), rbErr)
+		}
+		return errors.WithMessage(err, fmt.Sprintf("commit failed for migration %s; rolled back", formatVersion(migration.Version)))
+	}
+	return nil
 }
 
-func (d *Darwinx) runWithoutTx(ctx context.Context, records []MigrationRecord) error {
-	for _, migration := range planMigration(records, d.migrations) {
-		s := time.Now()
-
-		tx, txErr := d.pool.Begin(ctx)
-		if txErr != nil {
-			return errors.WithStack(txErr)
-		}
-
-		if _, err := tx.Exec(ctx, migration.Script); err != nil {
-			return errors.WithMessage(err, fmt.Sprintf("migration %f failed", migration.Version))
-		}
-
-		if err := d.insertRecord(ctx, tx, MigrationRecord{
-			Version:       migration.Version,
-			Description:   migration.Description,
-			Checksum:      migration.Checksum(),
-			AppliedAt:     s,
-			ExecutionTime: time.Since(s),
-		}); err != nil {
+func (d *Darwinx) run(ctx context.Context, records []MigrationRecord) error {
+	migrations := planMigration(records, d.migrations)
+	for _, migration := range migrations {
+		if err := d.applyMigration(ctx, migration); err != nil {
 			return err
-		}
-		if err := tx.Commit(ctx); err != nil {
-			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-				return errors.WithMessage(rollbackErr, "rollback failed")
-			}
-			return errors.WithMessage(err, "commit failed; transaction rolled back")
 		}
 	}
 	return nil
+}
+
+func formatVersion(v float64) string {
+	return fmt.Sprintf("%.3f", v)
 }
 
 // Info returns the status of all migrations
@@ -165,6 +148,17 @@ func (d *Darwinx) Info(ctx context.Context) ([]MigrationInfo, error) {
 		})
 	}
 	return info, nil
+}
+
+// Records returns all migration records from the database in descending order
+func (d *Darwinx) Records(ctx context.Context) ([]MigrationRecord, error) {
+	records, err := d.allFromDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sort.Sort(sort.Reverse(byMigrationRecordVersion(records)))
+
+	return records, nil
 }
 
 func (d *Darwinx) allFromDB(ctx context.Context) ([]MigrationRecord, error) {
