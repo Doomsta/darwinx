@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"net/url"
+
 	"github.com/Doomsta/darwinx"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"net/url"
 )
 
 const txt = `---- 1 Creating table posts
