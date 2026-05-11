@@ -22,7 +22,6 @@ type MigrationRecord struct {
 	ExecutionTime time.Duration
 }
 
-
 // Checksum calculate the Script sha256
 func (m Migration) Checksum() string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(m.Script)))

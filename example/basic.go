@@ -19,7 +19,7 @@ var (
 	}, {
 		Version:     2,
 		Description: "Adding column body",
-		Script:      "ALTER TABLE posts ADD body TEXT AFTER title;",
+		Script:      "ALTER TABLE posts ADD COLUMN body TEXT;",
 	}}
 )
 

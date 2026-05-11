@@ -1,7 +1,7 @@
 package darwinx
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -9,30 +9,31 @@ import (
 func MigrationsFromString(content string) (migrations []Migration, err error) {
 	content = strings.Trim(content, "\n")
 	for _, s := range strings.Split(content, "----") {
+		s = strings.TrimSpace(s)
 		if s == "" {
 			continue
 		}
 		parts := strings.SplitN(s, "\n", 2)
 		if len(parts) != 2 {
-			return nil, nil
+			return nil, fmt.Errorf("migration block must have a header line and SQL body; got %q", s)
 		}
-		header := parts[0]
-		sql := parts[1]
+		header := strings.TrimSpace(parts[0])
+		sql := strings.Trim(parts[1], "\n ")
 
-		headerParts := strings.SplitN(header, " ", 3)
-		if len(parts) != 2 {
-			return nil, errors.New("invalid header parts")
+		headerParts := strings.SplitN(header, " ", 2)
+		if len(headerParts) < 2 {
+			return nil, fmt.Errorf("invalid migration header (need version and description): %q", header)
 		}
 
-		version, err := strconv.ParseFloat(headerParts[1], 64)
+		version, err := strconv.ParseFloat(headerParts[0], 64)
 		if err != nil {
-			return nil, errors.Wrap(err, "invalid header version part")
+			return nil, fmt.Errorf("invalid header version part: %w", err)
 		}
 
 		migrations = append(migrations, Migration{
 			Version:     version,
-			Description: strings.Trim(headerParts[2], " "),
-			Script:      strings.Trim(sql, "\n "),
+			Description: strings.TrimSpace(headerParts[1]),
+			Script:      sql,
 		})
 	}
 

@@ -1,7 +1,7 @@
 package darwinx
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
 )
 
 type Option interface {
@@ -38,7 +38,7 @@ func WithTableName(tn string) Option {
 				(r >= 'A' && r <= 'Z') ||
 				(r >= '0' && r <= '9') ||
 				r == '_') {
-				return errors.New("invalid table name")
+				return fmt.Errorf("invalid table name: %q", tn)
 			}
 		}
 		darwinx.tableName = tn

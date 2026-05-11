@@ -5,10 +5,16 @@ the [darwin](https://github.com/GuiaBolso/darwin) library from GuiaBolso.
 
 ## Features
 
-- Easy schema migration 
+- Easy schema migration
 - Postgres-specific
 - Designed for simple Go applications
-supports upgrade-only, no branching migrations
+- Supports upgrade-only migrations (no branching)
+
+Migration versions are stored as `DOUBLE PRECISION` / `float64` in Go. Prefer integer-style values (for example `1`, `2`, `3`) to avoid floating-point surprises.
+
+The optional table name (`WithTableName`) must be a single unquoted SQL identifier (letters, digits, underscore only); it is not intended for schema-qualified names such as `public.migration`.
+
+`Info` creates the migration history table if needed (same as `Migrate`), then returns status for each configured migration.
 
 ## Installation
 
@@ -45,7 +51,11 @@ var (
 
 func main() {
 	ctx := context.Background()
-	conn, _ := pgxpool.New(ctx, /* postgresURL */)
+	conn, err := pgxpool.New(ctx, /* postgresURL */)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
 
 	d, err := darwinx.New(conn, darwinx.WithMigration(migrations))
 	if err != nil {
@@ -83,6 +93,22 @@ The library handles the following processes:
 3. **Compare with Database**: The collected migrations are compared against the current state of the database.
 
 4. **Apply Migrations**: New migrations are applied in order, and the migration history table is updated accordingly.
+
+## Testing
+
+Unit tests:
+
+```bash
+go test . -short
+```
+
+Integration tests (Postgres via [Testcontainers](https://golang.testcontainers.org/), requires Docker) omit `-short`:
+
+```bash
+go test .
+```
+
+If Docker is unavailable, integration tests are skipped automatically.
 
 ## Contributing
 

@@ -29,6 +29,9 @@ func (s Status) String() string {
 	}
 }
 
+// getStatus classifies a migration against applied records (sorted descending by version, as produced by Info).
+// A defined migration whose version is below the highest applied version but missing from the database is
+// reported as Ignored (e.g. a new "in-between" migration after later versions were already applied).
 func getStatus(inDatabase []MigrationRecord, migration Migration) Status {
 	if len(inDatabase) == 0 {
 		return Pending

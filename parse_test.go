@@ -93,3 +93,20 @@ CREATE TABLE config4 (id int PRIMARY KEY);
 	require.NoError(t, err)
 	assert.Equal(t, expected, actual)
 }
+
+func Test_MigrationsFromString_InvalidMissingBody(t *testing.T) {
+	_, err := MigrationsFromString(`---- 0.1 only header`)
+	require.Error(t, err)
+}
+
+func Test_MigrationsFromString_InvalidHeaderNoVersion(t *testing.T) {
+	_, err := MigrationsFromString(`----
+CREATE TABLE x (id int);`)
+	require.Error(t, err)
+}
+
+func Test_MigrationsFromString_InvalidVersion(t *testing.T) {
+	_, err := MigrationsFromString(`---- notafloat desc
+SELECT 1;`)
+	require.Error(t, err)
+}

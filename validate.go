@@ -2,10 +2,20 @@ package darwinx
 
 import (
 	"context"
+	"sort"
 )
 
 // Validate if the database migrations are applied and consistent
 func (d *Darwinx) Validate(ctx context.Context) error {
+	applied, err := d.allFromDB(ctx)
+	if err != nil {
+		return err
+	}
+	return d.validateWithRecords(applied)
+}
+
+// validateWithRecords runs static checks and compares the given DB snapshot to d.migrations.
+func (d *Darwinx) validateWithRecords(applied []MigrationRecord) error {
 	for _, migration := range d.migrations {
 		if err := validateVersion(migration); err != nil {
 			return err
@@ -13,11 +23,6 @@ func (d *Darwinx) Validate(ctx context.Context) error {
 	}
 
 	if err := validateDuplicates(d.migrations); err != nil {
-		return err
-	}
-
-	applied, err := d.allFromDB(ctx)
-	if err != nil {
 		return err
 	}
 
@@ -59,15 +64,16 @@ func compareMigrationChecksums(applied []MigrationRecord, migrations []Migration
 		versionMap[migration.Version] = migration
 	}
 
+	var changed []float64
 	for _, migration := range migrations {
 		if m, ok := versionMap[migration.Version]; ok {
 			if m.Checksum != migration.Checksum() {
-				return []float64{migration.Version}
+				changed = append(changed, migration.Version)
 			}
 		}
 	}
-
-	return nil
+	sort.Float64s(changed)
+	return changed
 }
 
 func validateVersion(m Migration) error {
